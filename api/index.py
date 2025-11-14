@@ -64,12 +64,26 @@ class handler(BaseHTTPRequestHandler):
         col_indices = {}
         for idx, header in enumerate(headers):
             header_lower = header.lower()
+            
+            # Temel bilgiler
             if 'ad name' in header_lower:
                 col_indices['ad_name'] = idx
+            elif 'campaign name' in header_lower:
+                col_indices['campaign_name'] = idx
+            elif 'ad set name' in header_lower:
+                col_indices['ad_set_name'] = idx
             elif 'image url' in header_lower:
                 col_indices['image_url'] = idx
             elif header_lower == 'week end' or 'week end' in header_lower:
                 col_indices['week_end'] = idx
+            elif header_lower == 'status':
+                col_indices['status'] = idx
+            elif 'days live' in header_lower:
+                col_indices['days_live'] = idx
+            elif header_lower == 'frequency':
+                col_indices['frequency'] = idx
+                
+            # Performans metrikleri
             elif header_lower == 'impressions':
                 col_indices['impressions'] = idx
             elif header_lower == 'reach':
@@ -80,9 +94,13 @@ class handler(BaseHTTPRequestHandler):
                 col_indices['ctr'] = idx
             elif header_lower == 'cpc':
                 col_indices['cpc'] = idx
+            elif header_lower == 'cpm':
+                col_indices['cpm'] = idx
             elif header_lower == 'spend':
                 col_indices['spend'] = idx
-            elif 'purchase' in header_lower and 'count' in header_lower:
+                
+            # Conversion metrikleri
+            elif 'purchases' in header_lower and 'count' in header_lower:
                 col_indices['purchases'] = idx
             elif 'purchase value' in header_lower:
                 col_indices['revenue'] = idx
@@ -90,16 +108,28 @@ class handler(BaseHTTPRequestHandler):
                 col_indices['add_to_cart'] = idx
             elif 'view content' in header_lower and 'count' in header_lower:
                 col_indices['view_content'] = idx
+                
+            # Video metrikleri
             elif 'video plays' in header_lower and 'any' in header_lower:
                 col_indices['video_plays'] = idx
+            elif 'video 25%' in header_lower or 'video 25' in header_lower:
+                col_indices['video_25'] = idx
+            elif 'video 50%' in header_lower or 'video 50' in header_lower:
+                col_indices['video_50'] = idx
+            elif 'video 75%' in header_lower or 'video 75' in header_lower:
+                col_indices['video_75'] = idx
+            elif 'video 95%' in header_lower or 'video 95' in header_lower:
+                col_indices['video_95'] = idx
+            elif 'video avg watch time' in header_lower:
+                col_indices['video_avg_watch'] = idx
+                
+            # Ranking metrikleri
             elif 'quality ranking' in header_lower:
                 col_indices['quality_ranking'] = idx
             elif 'engagement rate ranking' in header_lower:
                 col_indices['engagement_ranking'] = idx
             elif 'conversion rate ranking' in header_lower:
                 col_indices['conversion_ranking'] = idx
-            elif header_lower == 'status':
-                col_indices['status'] = idx
         
         if 'ad_name' not in col_indices:
             raise ValueError("Ad Name sütunu bulunamadı!")
@@ -153,17 +183,26 @@ class handler(BaseHTTPRequestHandler):
                     return default
                 return row[col_indices[key]].strip()
             
+            # Tüm metrikleri al
             impressions = get_value('impressions', 0)
             reach = get_value('reach', 0)
+            frequency = get_value('frequency', 0)
             clicks = get_value('clicks', 0)
             ctr = get_value('ctr', 0)
             cpc = get_value('cpc', 0)
+            cpm = get_value('cpm', 0)
             spend = get_value('spend', 0)
             purchases = get_value('purchases', 0)
             revenue = get_value('revenue', 0)
             add_to_cart = get_value('add_to_cart', 0)
             view_content = get_value('view_content', 0)
             video_plays = get_value('video_plays', 0)
+            video_25 = get_value('video_25', 0)
+            video_50 = get_value('video_50', 0)
+            video_75 = get_value('video_75', 0)
+            video_95 = get_value('video_95', 0)
+            video_avg_watch = get_value('video_avg_watch', 0)
+            days_live = get_value('days_live', 0)
             quality_ranking = get_string('quality_ranking', 'UNKNOWN')
             engagement_ranking = get_string('engagement_ranking', 'UNKNOWN')
             conversion_ranking = get_string('conversion_ranking', 'UNKNOWN')
@@ -173,9 +212,11 @@ class handler(BaseHTTPRequestHandler):
             grouped_data[ad_name]['weekly_metrics'].append({
                 'impressions': impressions,
                 'reach': reach,
+                'frequency': frequency,
                 'clicks': clicks,
                 'ctr': ctr,
                 'cpc': cpc,
+                'cpm': cpm,
                 'spend': spend,
                 'purchases': purchases,
                 'revenue': revenue,
@@ -183,6 +224,12 @@ class handler(BaseHTTPRequestHandler):
                 'add_to_cart': add_to_cart,
                 'view_content': view_content,
                 'video_plays': video_plays,
+                'video_25': video_25,
+                'video_50': video_50,
+                'video_75': video_75,
+                'video_95': video_95,
+                'video_avg_watch': video_avg_watch,
+                'days_live': days_live,
                 'quality_ranking': quality_ranking,
                 'engagement_ranking': engagement_ranking,
                 'conversion_ranking': conversion_ranking
@@ -198,9 +245,11 @@ class handler(BaseHTTPRequestHandler):
             weeks = data['weeks']
             impressions = [m['impressions'] for m in data['weekly_metrics']]
             reaches = [m['reach'] for m in data['weekly_metrics']]
+            frequencies = [m['frequency'] for m in data['weekly_metrics']]
             clicks = [m['clicks'] for m in data['weekly_metrics']]
             ctrs = [m['ctr'] for m in data['weekly_metrics']]
             cpcs = [m['cpc'] for m in data['weekly_metrics']]
+            cpms = [m['cpm'] for m in data['weekly_metrics']]
             spends = [m['spend'] for m in data['weekly_metrics']]
             purchases = [m['purchases'] for m in data['weekly_metrics']]
             revenues = [m['revenue'] for m in data['weekly_metrics']]
@@ -208,6 +257,12 @@ class handler(BaseHTTPRequestHandler):
             add_to_carts = [m['add_to_cart'] for m in data['weekly_metrics']]
             view_contents = [m['view_content'] for m in data['weekly_metrics']]
             video_plays_list = [m['video_plays'] for m in data['weekly_metrics']]
+            video_25_list = [m['video_25'] for m in data['weekly_metrics']]
+            video_50_list = [m['video_50'] for m in data['weekly_metrics']]
+            video_75_list = [m['video_75'] for m in data['weekly_metrics']]
+            video_95_list = [m['video_95'] for m in data['weekly_metrics']]
+            video_avg_watch_list = [m['video_avg_watch'] for m in data['weekly_metrics']]
+            days_live_list = [m['days_live'] for m in data['weekly_metrics']]
             quality_rankings = [m['quality_ranking'] for m in data['weekly_metrics']]
             engagement_rankings = [m['engagement_ranking'] for m in data['weekly_metrics']]
             conversion_rankings = [m['conversion_ranking'] for m in data['weekly_metrics']]
@@ -253,9 +308,12 @@ class handler(BaseHTTPRequestHandler):
                 'weeklyData': {
                     'weeks': weeks,
                     'impressions': impressions,
+                    'reach': reaches,
+                    'frequency': frequencies,
                     'clicks': clicks,
                     'ctr': ctrs,
                     'cpc': cpcs,
+                    'cpm': cpms,
                     'spend': spends,
                     'purchases': purchases,
                     'revenue': revenues,
@@ -263,6 +321,12 @@ class handler(BaseHTTPRequestHandler):
                     'add_to_cart': add_to_carts,
                     'view_content': view_contents,
                     'video_plays': video_plays_list,
+                    'video_25': video_25_list,
+                    'video_50': video_50_list,
+                    'video_75': video_75_list,
+                    'video_95': video_95_list,
+                    'video_avg_watch': video_avg_watch_list,
+                    'days_live': days_live_list,
                     'quality_ranking': quality_rankings,
                     'engagement_ranking': engagement_rankings,
                     'conversion_ranking': conversion_rankings
