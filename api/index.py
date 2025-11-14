@@ -43,6 +43,7 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             error_response = json.dumps({
                 'error': str(e),
@@ -52,134 +53,151 @@ class handler(BaseHTTPRequestHandler):
     
     def parse_sheet_data(self, rows):
         """
-        Google Sheets'teki Meta_Pivot_AdName_Weekly formatını parse eder
+        Google Sheets'teki haftalık raw data formatını parse eder
         
         Format:
-        Row 0: Headers (Metric, Ad Name, Date1, Date2, ..., Total)
-        Row 1+: Data (Tıklama, AdName1, val1, val2, ...)
+        Period | Week Start | Week End | Ad Name | Status | Days Live | Impressions | Reach | ...
         """
         
         # Header'ları al
-        headers = rows[0]
+        headers = [h.strip() for h in rows[0]]
         
-        # Ad Name ve tarih sütunlarını bul
-        ad_name_idx = None
-        image_url_idx = None
-        date_columns = []
-        
+        # Sütun indekslerini bul
+        col_indices = {}
         for idx, header in enumerate(headers):
-            header_lower = header.lower().strip()
-            if 'ad name' in header_lower or header_lower == 'name':
-                ad_name_idx = idx
-            elif 'image' in header_lower or 'url' in header_lower:
-                image_url_idx = idx
-            elif idx >= 2 and header and 'total' not in header_lower:
-                # 2. sütundan sonraki tarihli sütunlar
-                date_columns.append({
-                    'index': idx,
-                    'date': header.strip()
-                })
+            header_lower = header.lower()
+            if 'ad name' in header_lower:
+                col_indices['ad_name'] = idx
+            elif header_lower == 'week end' or 'week end' in header_lower:
+                col_indices['week_end'] = idx
+            elif header_lower == 'impressions':
+                col_indices['impressions'] = idx
+            elif header_lower == 'reach':
+                col_indices['reach'] = idx
+            elif header_lower == 'clicks':
+                col_indices['clicks'] = idx
+            elif header_lower == 'ctr':
+                col_indices['ctr'] = idx
+            elif header_lower == 'cpc':
+                col_indices['cpc'] = idx
+            elif header_lower == 'spend':
+                col_indices['spend'] = idx
+            elif 'purchase' in header_lower and 'count' in header_lower:
+                col_indices['purchases'] = idx
+            elif 'purchase value' in header_lower:
+                col_indices['revenue'] = idx
+            elif header_lower == 'status':
+                col_indices['status'] = idx
         
-        if ad_name_idx is None:
+        if 'ad_name' not in col_indices:
             raise ValueError("Ad Name sütunu bulunamadı!")
         
         # Verileri grupla (Ad Name bazında)
         grouped_data = defaultdict(lambda: {
             'name': '',
-            'imageUrl': '',
             'status': 'ACTIVE',
-            'weeklyData': {
-                'weeks': [col['date'] for col in date_columns],
-                'impressions': [],
-                'clicks': [],
-                'ctr': [],
-                'cpc': [],
-                'spend': [],
-                'purchases': [],
-                'revenue': [],
-                'roas': []
-            }
+            'imageUrl': '',
+            'weeks': [],
+            'weekly_metrics': []
         })
         
         # Her satırı işle
         for row in rows[1:]:
-            if len(row) < 3:
+            if len(row) < 5:
                 continue
             
-            metric_name = row[0].strip()
-            ad_name = row[ad_name_idx].strip() if ad_name_idx < len(row) else ''
+            ad_name = row[col_indices['ad_name']].strip() if 'ad_name' in col_indices and col_indices['ad_name'] < len(row) else ''
             
-            if not ad_name or not metric_name:
+            if not ad_name:
                 continue
             
             # İlk defa görülen ad ise bilgileri kaydet
             if not grouped_data[ad_name]['name']:
                 grouped_data[ad_name]['name'] = ad_name
-                if image_url_idx and image_url_idx < len(row):
-                    grouped_data[ad_name]['imageUrl'] = row[image_url_idx].strip()
+                if 'status' in col_indices and col_indices['status'] < len(row):
+                    status = row[col_indices['status']].strip()
+                    grouped_data[ad_name]['status'] = status if status else 'ACTIVE'
             
-            # Haftalık değerleri çek
-            weekly_values = []
-            for date_col in date_columns:
-                if date_col['index'] < len(row):
-                    value = row[date_col['index']].strip()
-                    # Temizle: ₺, %, virgül vs.
-                    value = value.replace('₺', '').replace('%', '').replace(',', '').strip()
-                    try:
-                        weekly_values.append(float(value) if value else 0)
-                    except ValueError:
-                        weekly_values.append(0)
-                else:
-                    weekly_values.append(0)
+            # Hafta bilgisini al
+            week_end = row[col_indices['week_end']].strip() if 'week_end' in col_indices and col_indices['week_end'] < len(row) else ''
             
-            # Metriğe göre doğru diziye ekle
-            metric_lower = metric_name.lower()
+            # Metriği parse et
+            def get_value(key, default=0):
+                if key not in col_indices or col_indices[key] >= len(row):
+                    return default
+                value = row[col_indices[key]].strip()
+                # Temizle: ₺, %, virgül vs.
+                value = value.replace('₺', '').replace('%', '').replace(',', '').strip()
+                try:
+                    return float(value) if value else default
+                except ValueError:
+                    return default
             
-            if 'impression' in metric_lower or 'gösterim' in metric_lower:
-                grouped_data[ad_name]['weeklyData']['impressions'] = weekly_values
-            elif 'tıklama' in metric_lower or 'click' in metric_lower:
-                grouped_data[ad_name]['weeklyData']['clicks'] = weekly_values
-            elif metric_lower == 'ctr':
-                grouped_data[ad_name]['weeklyData']['ctr'] = weekly_values
-            elif metric_lower == 'cpc':
-                grouped_data[ad_name]['weeklyData']['cpc'] = weekly_values
-            elif 'satış' in metric_lower or 'purchase' in metric_lower or 'satış' in metric_lower:
-                grouped_data[ad_name]['weeklyData']['purchases'] = weekly_values
-            elif 'harcama' in metric_lower or 'spend' in metric_lower:
-                grouped_data[ad_name]['weeklyData']['spend'] = weekly_values
-            elif 'gelir' in metric_lower or 'revenue' in metric_lower:
-                grouped_data[ad_name]['weeklyData']['revenue'] = weekly_values
-            elif metric_lower == 'roas':
-                grouped_data[ad_name]['weeklyData']['roas'] = weekly_values
+            impressions = get_value('impressions', 0)
+            reach = get_value('reach', 0)
+            clicks = get_value('clicks', 0)
+            ctr = get_value('ctr', 0)
+            cpc = get_value('cpc', 0)
+            spend = get_value('spend', 0)
+            purchases = get_value('purchases', 0)
+            revenue = get_value('revenue', 0)
+            
+            # Haftalık veriyi ekle
+            grouped_data[ad_name]['weeks'].append(week_end)
+            grouped_data[ad_name]['weekly_metrics'].append({
+                'impressions': impressions,
+                'reach': reach,
+                'clicks': clicks,
+                'ctr': ctr,
+                'cpc': cpc,
+                'spend': spend,
+                'purchases': purchases,
+                'revenue': revenue,
+                'roas': (revenue / spend) if spend > 0 else 0
+            })
         
-        # Toplam değerleri hesapla ve eski format için ekle
+        # Asset objelerini oluştur
         assets = []
         for idx, (ad_name, data) in enumerate(grouped_data.items(), 1):
-            wd = data['weeklyData']
+            if not data['weekly_metrics']:
+                continue
+            
+            # Haftalık verileri dizilere dönüştür
+            weeks = data['weeks']
+            impressions = [m['impressions'] for m in data['weekly_metrics']]
+            reaches = [m['reach'] for m in data['weekly_metrics']]
+            clicks = [m['clicks'] for m in data['weekly_metrics']]
+            ctrs = [m['ctr'] for m in data['weekly_metrics']]
+            cpcs = [m['cpc'] for m in data['weekly_metrics']]
+            spends = [m['spend'] for m in data['weekly_metrics']]
+            purchases = [m['purchases'] for m in data['weekly_metrics']]
+            revenues = [m['revenue'] for m in data['weekly_metrics']]
+            roas_list = [m['roas'] for m in data['weekly_metrics']]
             
             # Toplamları hesapla
-            total_impressions = sum(wd['impressions']) if wd['impressions'] else 0
-            total_clicks = sum(wd['clicks']) if wd['clicks'] else 0
-            total_spend = sum(wd['spend']) if wd['spend'] else 0
-            total_purchases = sum(wd['purchases']) if wd['purchases'] else 0
-            total_revenue = sum(wd['revenue']) if wd['revenue'] else 0
+            total_impressions = sum(impressions)
+            total_reach = sum(reaches)
+            total_clicks = sum(clicks)
+            total_spend = sum(spends)
+            total_purchases = sum(purchases)
+            total_revenue = sum(revenues)
             
-            # Ortalama/toplam CTR, CPC, ROAS
-            avg_ctr = sum(wd['ctr']) / len(wd['ctr']) if wd['ctr'] else 0
-            avg_cpc = sum(wd['cpc']) / len(wd['cpc']) if wd['cpc'] else 0
+            # Ortalama CTR, CPC, ROAS
+            avg_ctr = sum(ctrs) / len(ctrs) if ctrs else 0
+            avg_cpc = sum(cpcs) / len(cpcs) if cpcs else 0
             total_roas = (total_revenue / total_spend) if total_spend > 0 else 0
             
-            # Asset objesi oluştur (eski format + yeni weeklyData)
+            # Asset objesi oluştur
             asset = {
                 'id': idx,
                 'name': data['name'],
                 'status': data['status'],
                 'imageUrl': data['imageUrl'],
-                'hasVideo': False,  # Bu bilgi sheet'te yoksa varsayılan
+                'hasVideo': False,
                 
-                # Toplam değerler (eski format için)
+                # Toplam değerler
                 'impression': int(total_impressions),
-                'reach': int(total_impressions * 0.8),  # Yaklaşık reach (eğer sheet'te yoksa)
+                'reach': int(total_reach),
                 'click': int(total_clicks),
                 'ctr': round(avg_ctr, 2),
                 'spend': round(total_spend, 2),
@@ -188,7 +206,17 @@ class handler(BaseHTTPRequestHandler):
                 'roas': round(total_roas, 2),
                 
                 # Haftalık detay verisi
-                'weeklyData': data['weeklyData']
+                'weeklyData': {
+                    'weeks': weeks,
+                    'impressions': impressions,
+                    'clicks': clicks,
+                    'ctr': ctrs,
+                    'cpc': cpcs,
+                    'spend': spends,
+                    'purchases': purchases,
+                    'revenue': revenues,
+                    'roas': roas_list
+                }
             }
             
             assets.append(asset)
