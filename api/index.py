@@ -5,15 +5,15 @@ import csv
 from collections import defaultdict
 
 # Google Sheets ayarları
-SHEET_ID = "676609355"  # IVIzone Google Sheets ID
-SHEET_NAME = "Meta_Pivot_AdName_Weekly"
+SHEET_KEY = "2PACX-1vS0TLi3H4e3gTxh8ZfOqiwKqCIZ2Yp7VZ5_YKn2TO2exNDRKWC8HO9KcAZ0YJHzxugIjoiEfSDUoN0W"
+GID = "676609355"  # Meta_Pivot_AdName_Weekly sekme ID'si
 
 class handler(BaseHTTPRequestHandler):
     
     def do_GET(self):
         try:
-            # Google Sheets CSV export URL
-            url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
+            # Google Sheets CSV export URL (published sheets için)
+            url = f"https://docs.google.com/spreadsheets/d/e/{SHEET_KEY}/pub?gid={GID}&single=true&output=csv"
             
             # CSV verisini çek
             with urllib.request.urlopen(url) as response:
