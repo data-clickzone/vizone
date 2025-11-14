@@ -54,9 +54,7 @@ class handler(BaseHTTPRequestHandler):
     def parse_sheet_data(self, rows):
         """
         Google Sheets'teki haftalık raw data formatını parse eder
-        
-        Format:
-        Period | Week Start | Week End | Ad Name | Status | Days Live | Impressions | Reach | ...
+        AB sütunundaki Image URL'leri de dahil eder
         """
         
         # Header'ları al
@@ -68,6 +66,8 @@ class handler(BaseHTTPRequestHandler):
             header_lower = header.lower()
             if 'ad name' in header_lower:
                 col_indices['ad_name'] = idx
+            elif 'image url' in header_lower:
+                col_indices['image_url'] = idx
             elif header_lower == 'week end' or 'week end' in header_lower:
                 col_indices['week_end'] = idx
             elif header_lower == 'impressions':
@@ -86,6 +86,18 @@ class handler(BaseHTTPRequestHandler):
                 col_indices['purchases'] = idx
             elif 'purchase value' in header_lower:
                 col_indices['revenue'] = idx
+            elif 'add to cart' in header_lower and 'count' in header_lower:
+                col_indices['add_to_cart'] = idx
+            elif 'view content' in header_lower and 'count' in header_lower:
+                col_indices['view_content'] = idx
+            elif 'video plays' in header_lower and 'any' in header_lower:
+                col_indices['video_plays'] = idx
+            elif 'quality ranking' in header_lower:
+                col_indices['quality_ranking'] = idx
+            elif 'engagement rate ranking' in header_lower:
+                col_indices['engagement_ranking'] = idx
+            elif 'conversion rate ranking' in header_lower:
+                col_indices['conversion_ranking'] = idx
             elif header_lower == 'status':
                 col_indices['status'] = idx
         
@@ -117,6 +129,9 @@ class handler(BaseHTTPRequestHandler):
                 if 'status' in col_indices and col_indices['status'] < len(row):
                     status = row[col_indices['status']].strip()
                     grouped_data[ad_name]['status'] = status if status else 'ACTIVE'
+                if 'image_url' in col_indices and col_indices['image_url'] < len(row):
+                    image_url = row[col_indices['image_url']].strip()
+                    grouped_data[ad_name]['imageUrl'] = image_url
             
             # Hafta bilgisini al
             week_end = row[col_indices['week_end']].strip() if 'week_end' in col_indices and col_indices['week_end'] < len(row) else ''
@@ -133,6 +148,11 @@ class handler(BaseHTTPRequestHandler):
                 except ValueError:
                     return default
             
+            def get_string(key, default=''):
+                if key not in col_indices or col_indices[key] >= len(row):
+                    return default
+                return row[col_indices[key]].strip()
+            
             impressions = get_value('impressions', 0)
             reach = get_value('reach', 0)
             clicks = get_value('clicks', 0)
@@ -141,6 +161,12 @@ class handler(BaseHTTPRequestHandler):
             spend = get_value('spend', 0)
             purchases = get_value('purchases', 0)
             revenue = get_value('revenue', 0)
+            add_to_cart = get_value('add_to_cart', 0)
+            view_content = get_value('view_content', 0)
+            video_plays = get_value('video_plays', 0)
+            quality_ranking = get_string('quality_ranking', 'UNKNOWN')
+            engagement_ranking = get_string('engagement_ranking', 'UNKNOWN')
+            conversion_ranking = get_string('conversion_ranking', 'UNKNOWN')
             
             # Haftalık veriyi ekle
             grouped_data[ad_name]['weeks'].append(week_end)
@@ -153,7 +179,13 @@ class handler(BaseHTTPRequestHandler):
                 'spend': spend,
                 'purchases': purchases,
                 'revenue': revenue,
-                'roas': (revenue / spend) if spend > 0 else 0
+                'roas': (revenue / spend) if spend > 0 else 0,
+                'add_to_cart': add_to_cart,
+                'view_content': view_content,
+                'video_plays': video_plays,
+                'quality_ranking': quality_ranking,
+                'engagement_ranking': engagement_ranking,
+                'conversion_ranking': conversion_ranking
             })
         
         # Asset objelerini oluştur
@@ -173,6 +205,12 @@ class handler(BaseHTTPRequestHandler):
             purchases = [m['purchases'] for m in data['weekly_metrics']]
             revenues = [m['revenue'] for m in data['weekly_metrics']]
             roas_list = [m['roas'] for m in data['weekly_metrics']]
+            add_to_carts = [m['add_to_cart'] for m in data['weekly_metrics']]
+            view_contents = [m['view_content'] for m in data['weekly_metrics']]
+            video_plays_list = [m['video_plays'] for m in data['weekly_metrics']]
+            quality_rankings = [m['quality_ranking'] for m in data['weekly_metrics']]
+            engagement_rankings = [m['engagement_ranking'] for m in data['weekly_metrics']]
+            conversion_rankings = [m['conversion_ranking'] for m in data['weekly_metrics']]
             
             # Toplamları hesapla
             total_impressions = sum(impressions)
@@ -181,6 +219,9 @@ class handler(BaseHTTPRequestHandler):
             total_spend = sum(spends)
             total_purchases = sum(purchases)
             total_revenue = sum(revenues)
+            total_add_to_cart = sum(add_to_carts)
+            total_view_content = sum(view_contents)
+            total_video_plays = sum(video_plays_list)
             
             # Ortalama CTR, CPC, ROAS
             avg_ctr = sum(ctrs) / len(ctrs) if ctrs else 0
@@ -193,7 +234,7 @@ class handler(BaseHTTPRequestHandler):
                 'name': data['name'],
                 'status': data['status'],
                 'imageUrl': data['imageUrl'],
-                'hasVideo': False,
+                'hasVideo': total_video_plays > 0,
                 
                 # Toplam değerler
                 'impression': int(total_impressions),
@@ -204,6 +245,9 @@ class handler(BaseHTTPRequestHandler):
                 'purchase': int(total_purchases),
                 'revenue': round(total_revenue, 2),
                 'roas': round(total_roas, 2),
+                'add_to_cart': int(total_add_to_cart),
+                'view_content': int(total_view_content),
+                'video_plays': int(total_video_plays),
                 
                 # Haftalık detay verisi
                 'weeklyData': {
@@ -215,7 +259,13 @@ class handler(BaseHTTPRequestHandler):
                     'spend': spends,
                     'purchases': purchases,
                     'revenue': revenues,
-                    'roas': roas_list
+                    'roas': roas_list,
+                    'add_to_cart': add_to_carts,
+                    'view_content': view_contents,
+                    'video_plays': video_plays_list,
+                    'quality_ranking': quality_rankings,
+                    'engagement_ranking': engagement_rankings,
+                    'conversion_ranking': conversion_rankings
                 }
             }
             
