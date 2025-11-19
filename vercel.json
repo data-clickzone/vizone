@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/api/index.py"
+    },
+    {
       "source": "/api/bella",
       "destination": "/api/bella/index.py"
     },
