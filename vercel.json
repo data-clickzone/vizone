@@ -1,8 +1,12 @@
 {
   "rewrites": [
     {
-      "source": "/",
-      "destination": "/api"
+      "source": "/api/bella",
+      "destination": "/api/bella/index.py"
+    },
+    {
+      "source": "/api/bella/youtube",
+      "destination": "/api/bella/youtube/index.py"
     }
   ]
 }
