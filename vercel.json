@@ -11,6 +11,14 @@
     {
       "source": "/api/bella/youtube",
       "destination": "/api/bella/youtube/index.py"
+    },
+    {
+      "source": "/api/desa",
+      "destination": "/api/desa/index.py"
+    },
+    {
+      "source": "/api/desa/youtube",
+      "destination": "/api/desa/youtube/index.py"
     }
   ]
 }
