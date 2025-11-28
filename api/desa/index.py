@@ -1,10 +1,12 @@
+# api/desa/index.py
+# Desa Meta Ad Report -> VI zone dashboard JSON
 from http.server import BaseHTTPRequestHandler
 import json
 import urllib.request
 import csv
 from collections import defaultdict
 
-# Google Sheets ayarları
+# Google Sheets ayarları - DESA
 SHEET_KEY = "2PACX-1vS0TLi3H4e3gTxh8ZfOqiwKqCIZ2Yp7VZ5_YKn2TO2exNDRKWC8HO9KcAZ0YJHzxugIjoiEfSDUoN0W"
 GID = "676609355"  # Meta_Pivot_AdName_Weekly sekme ID'si
 
@@ -54,7 +56,7 @@ class handler(BaseHTTPRequestHandler):
     def parse_sheet_data(self, rows):
         """
         Google Sheets'teki haftalık raw data formatını parse eder
-        AB sütunundaki Image URL'leri de dahil eder
+        Image URL'leri de dahil eder
         """
         
         # Header'ları al
@@ -290,6 +292,7 @@ class handler(BaseHTTPRequestHandler):
                 'status': data['status'],
                 'imageUrl': data['imageUrl'],
                 'hasVideo': total_video_plays > 0,
+                'labels': [],  # Etiketler için boş array
                 
                 # Toplam değerler
                 'impression': int(total_impressions),
@@ -332,6 +335,10 @@ class handler(BaseHTTPRequestHandler):
                     'conversion_ranking': conversion_rankings
                 }
             }
+            
+            # Video varsa label ekle
+            if total_video_plays > 0:
+                asset['labels'].append('video')
             
             assets.append(asset)
         
